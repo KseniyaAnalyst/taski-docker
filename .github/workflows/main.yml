@@ -22,7 +22,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -58,26 +57,20 @@ jobs:
           cd backend/
           python manage.py test
 
-  build-and-deploy:
-    needs: tests
+  build_and_push_to_docker_hub:
+    name: Push backend Docker image to DockerHub
     runs-on: ubuntu-latest
-    concurrency:
-      group: production-deploy
-      cancel-in-progress: false
-
+    needs: tests
     steps:
-      - name: Check out code
+      - name: Check out the repo
         uses: actions/checkout@v3
-
-      - name: Login to Docker Hub
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker 
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build & push backend
         uses: docker/build-push-action@v5
         with:
@@ -85,20 +78,11 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/taski_backend:latest
 
-      - name: Build & push frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/taski_frontend:latest
-
-      - name: Build & push gateway
-        uses: docker/build-push-action@v5
-        with:
-          context: ./gateway
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/taski_gateway:latest
-
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - build_and_push_to_docker_hub
+    steps:
       - name: Deploy to prod via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
